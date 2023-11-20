@@ -23,7 +23,7 @@
 </head>
 <body>
 
-<h1>Serial API Polyfill Demo</h1>
+<h1>Serial API Polyfill Demo V0.0</h1>
 <button id='request-device'>Request Device</button>
 <button id='send'>Send Text(Tx)</button> <input type="text" id="inputText"/>
 <button id='get'>Read(Rx)</button>
@@ -114,6 +114,7 @@
   getButton.addEventListener('click', async () => {
     reader.read().then(({value}) => {
         receivedText += ab2str(value);
+        alert("receive: "+ str(receivedText));
         document.getElementById("ReceivedText").innerHTML= receivedText
       },
       error => {console.error('error from read', error); alert("error: "+ str(error) );}
@@ -124,6 +125,7 @@
   let getInfoButton = document.getElementById('getInfo');
   getInfoButton.addEventListener('click', () => {
     const results = mySerial.getInfo();
+    alert ("info: "+ str(results));
     console.log('get info results', results);
     document.getElementById("usbVendorId").textContent = results.usbVendorId;
     document.getElementById("usbProductId").textContent = results.usbProductId;
