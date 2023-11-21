@@ -34,6 +34,11 @@
 <p>Received Text:</p>
 <p id='ReceivedText'></p>
 <br>
+<p>console:</p>
+<div id="my_console">
+ 
+</div>
+<br>
 <script>var exports = {};</script>
 <script src="serial.js"></script>
 
@@ -104,7 +109,8 @@
   sendButton.addEventListener('click', async () => {
     writer.ready.then(() => {
       let inputArrayBuffer = str2ab(document.getElementById("inputText").value);
-      alert("write:" + str(inputArrayBuffer));
+      let elem = document.getElementById('my_console');
+      elem.innerHTML = elem.innerHTML + "write:" + str(inputArrayBuffer);
       return writer.write(inputArrayBuffer);
     })
   });
@@ -114,10 +120,14 @@
   getButton.addEventListener('click', async () => {
     reader.read().then(({value}) => {
         receivedText += ab2str(value);
-        alert("receive: "+ str(receivedText));
+        let elem = document.getElementById('my_console');
+        elem.innerHTML = elem.innerHTML + "receive: "+ str(receivedText);
         document.getElementById("ReceivedText").innerHTML= receivedText
       },
-      error => {console.error('error from read', error); alert("error: "+ str(error) );}
+      error => {console.error('error from read', error); 
+        let elem = document.getElementById('my_console');
+        elem.innerHTML = elem.innerHTML + "error: "+ str(error);
+        }
     );
   });
 
@@ -125,7 +135,8 @@
   let getInfoButton = document.getElementById('getInfo');
   getInfoButton.addEventListener('click', () => {
     const results = mySerial.getInfo();
-    alert ("info: "+ str(results));
+    let elem = document.getElementById('my_console');
+    elem.innerHTML = elem.innerHTML + "info: "+ str(results);
     console.log('get info results', results);
     document.getElementById("usbVendorId").textContent = results.usbVendorId;
     document.getElementById("usbProductId").textContent = results.usbProductId;
