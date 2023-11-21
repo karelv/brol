@@ -105,8 +105,8 @@
     return String.fromCharCode.apply(null, buf);
   }
 
-  let sendButton = document.getElementById('test');
-  sendButton.addEventListener('click', async () => {
+  let testButton = document.getElementById('test');
+  testButton.addEventListener('click', async () => {
       let elem = document.getElementById('my_console');
       elem.innerHTML = elem.innerHTML + "TEST\n";
   });
