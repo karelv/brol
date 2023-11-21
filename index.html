@@ -117,9 +117,10 @@
   sendButton.addEventListener('click', async () => {
     writer.ready.then(() => {
       let inputArrayBuffer = str2ab(document.getElementById("inputText").value);
+      let ret = writer.write(inputArrayBuffer);
       let elem = document.getElementById('my_console');
-      elem.innerHTML = elem.innerHTML + "write:" + str(inputArrayBuffer);
-      return writer.write(inputArrayBuffer);
+      elem.innerHTML = elem.innerHTML + "write:" + inputArrayBuffer;
+      return ret;
     })
   });
 //reads a chunk of data from the stream at a max of 64 bytes
@@ -129,12 +130,12 @@
     reader.read().then(({value}) => {
         receivedText += ab2str(value);
         let elem = document.getElementById('my_console');
-        elem.innerHTML = elem.innerHTML + "receive: "+ str(receivedText);
+        elem.innerHTML = elem.innerHTML + "receive: "+ receivedText;
         document.getElementById("ReceivedText").innerHTML= receivedText
       },
       error => {console.error('error from read', error); 
         let elem = document.getElementById('my_console');
-        elem.innerHTML = elem.innerHTML + "error: "+ str(error);
+        elem.innerHTML = elem.innerHTML + "error: "+ error;
         }
     );
   });
