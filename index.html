@@ -23,7 +23,7 @@
 </head>
 <body>
 
-<h1>Serial API Polyfill Demo V0.1</h1>
+<h1>Serial API Polyfill Demo V0.2</h1>
 <button id='test'>test JS</button>
 <button id='request-device'>Request Device</button>
 <button id='send'>Send Text(Tx)</button> <input type="text" id="inputText"/>
@@ -94,7 +94,7 @@
   });
 
   str2ab = function(str) {
-    var buf = new Uint8Array(str.length) + 1; // 1 byte for each char
+    var buf = new Uint8Array(str.length+1); // 1 byte for each char
     for (var i=0, strLen=str.length; i < strLen; i++) {
       buf[i] = str.charCodeAt(i);
       buf[i+1] = 10;
