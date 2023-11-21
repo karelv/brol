@@ -23,7 +23,7 @@
 </head>
 <body>
 
-<h1>Serial API Polyfill Demo V0.0</h1>
+<h1>Serial API Polyfill Demo V0.1</h1>
 <button id='test'>test JS</button>
 <button id='request-device'>Request Device</button>
 <button id='send'>Send Text(Tx)</button> <input type="text" id="inputText"/>
@@ -31,15 +31,15 @@
 <p>USB vendor ID: <span id="usbVendorId"/></p>
 <p>USB product ID: <span id="usbProductId"/></p>
 <button id='getInfo'>Get Serial Info</button>
-<br>
+<hr>
 <p>Received Text:</p>
 <p id='ReceivedText'></p>
-<br>
+<hr>
 <p>console:</p>
 <div id="my_console">
  
 </div>
-<br>
+<hr>
 <script>var exports = {};</script>
 <script src="serial.js"></script>
 
@@ -143,11 +143,12 @@
   let getInfoButton = document.getElementById('getInfo');
   getInfoButton.addEventListener('click', () => {
     const results = mySerial.getInfo();
-    let elem = document.getElementById('my_console');
-    elem.innerHTML = elem.innerHTML + "info: "+ str(results);
     console.log('get info results', results);
     document.getElementById("usbVendorId").textContent = results.usbVendorId;
     document.getElementById("usbProductId").textContent = results.usbProductId;
+    let elem = document.getElementById('my_console');
+    elem.innerHTML = elem.innerHTML + "info: ";
+    elem.innerHTML = elem.innerHTML + results;
   });
 
 
