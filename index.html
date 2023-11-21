@@ -24,6 +24,7 @@
 <body>
 
 <h1>Serial API Polyfill Demo V0.0</h1>
+<button id='test'>test JS</button>
 <button id='request-device'>Request Device</button>
 <button id='send'>Send Text(Tx)</button> <input type="text" id="inputText"/>
 <button id='get'>Read(Rx)</button>
@@ -50,6 +51,8 @@
   let reader = {};
   let writer = {};
 
+
+ 
 //if there is already a device that we have been given permission for we can just grab it like this
   document.addEventListener('DOMContentLoaded', async () => {
     serial.getPorts().then(async (serialDevices) => {
@@ -102,6 +105,11 @@
     return String.fromCharCode.apply(null, buf);
   }
 
+  let sendButton = document.getElementById('test');
+  sendButton.addEventListener('click', async () => {
+      let elem = document.getElementById('my_console');
+      elem.innerHTML = elem.innerHTML + "TEST\n";
+  });
 //send the text out after converting it to an array buffer.
 //The conversion function above is simply for ascii.
 //please convert to an array buffer in what ever way fits your application
