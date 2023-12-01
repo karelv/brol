@@ -28,8 +28,8 @@ let connectButton: HTMLButtonElement;
 let sentButton: HTMLButtonElement;
 let sentInput: HTMLInputElement;
 
-let term: HTMLSectionElement;
-let con: HTMLSectionElement;
+let term: HTMLElement;
+let con: HTMLElement;
 
 let port: SerialPort | SerialPortPolyfill | undefined;
 let reader: ReadableStreamDefaultReader | ReadableStreamBYOBReader | undefined;
@@ -210,8 +210,8 @@ async function disconnectFromPort(): Promise<void> {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
-  term = document.getElementById('terminal') as HTMLSectionElement;
-  con = document.getElementById('console') as HTMLSectionElement;
+  term = document.getElementById('terminal') as HTMLElement;
+  con = document.getElementById('console') as HTMLElement;
   connectButton = document.getElementById('connect') as HTMLButtonElement;
   sentButton = document.getElementById('sent') as HTMLButtonElement;
   sentInput = document.getElementById('serial_send') as HTMLInputElement;
