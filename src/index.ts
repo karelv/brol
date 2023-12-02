@@ -14,56 +14,217 @@
  * limitations under the License.
  */
 
+import {Terminal} from 'xterm';
+import {FitAddon} from 'xterm-addon-fit';
+import {WebLinksAddon} from 'xterm-addon-web-links';
+import 'xterm/css/xterm.css';
 import {
   serial as polyfill, SerialPort as SerialPortPolyfill,
 } from 'web-serial-polyfill';
-
-const encoder = new TextEncoder();
 
 /**
  * Elements of the port selection dropdown extend HTMLOptionElement so that
  * they can reference the SerialPort they represent.
  */
+declare class PortOption extends HTMLOptionElement {
+  port: SerialPort | SerialPortPolyfill;
+}
+
+let portSelector: HTMLSelectElement;
 let connectButton: HTMLButtonElement;
-let sentButton: HTMLButtonElement;
-let sentInput: HTMLInputElement;
+let baudRateSelector: HTMLSelectElement;
+let customBaudRateInput: HTMLInputElement;
+let dataBitsSelector: HTMLSelectElement;
+let paritySelector: HTMLSelectElement;
+let stopBitsSelector: HTMLSelectElement;
+let flowControlCheckbox: HTMLInputElement;
+let echoCheckbox: HTMLInputElement;
+let flushOnEnterCheckbox: HTMLInputElement;
+let autoconnectCheckbox: HTMLInputElement;
 
-let term: HTMLElement;
-let con: HTMLElement;
-
+let portCounter = 1;
 let port: SerialPort | SerialPortPolyfill | undefined;
 let reader: ReadableStreamDefaultReader | ReadableStreamBYOBReader | undefined;
 
-let usePolyfill = false;
-let supported = false;
-
+const urlParams = new URLSearchParams(window.location.search);
+const usePolyfill = urlParams.has('polyfill');
 const bufferSize = 8 * 1024; // 8kB
 
+const term = new Terminal({
+  scrollback: 10_000,
+});
+
+const fitAddon = new FitAddon();
+term.loadAddon(fitAddon);
+
+term.loadAddon(new WebLinksAddon());
+
+const encoder = new TextEncoder();
+let toFlush = '';
+term.onData((data) => {
+  if (echoCheckbox.checked) {
+    term.write(data);
+  }
+
+  if (port?.writable == null) {
+    console.warn(`unable to find writable port`);
+    return;
+  }
+
+  const writer = port.writable.getWriter();
+
+  if (flushOnEnterCheckbox.checked) {
+    toFlush += data;
+    if (data === '\r') {
+      writer.write(encoder.encode(toFlush));
+      writer.releaseLock();
+      toFlush = '';
+    }
+  } else {
+    writer.write(encoder.encode(data));
+  }
+
+  writer.releaseLock();
+});
+
+/**
+ * Returns the option corresponding to the given SerialPort if one is present
+ * in the selection dropdown.
+ *
+ * @param {SerialPort} port the port to find
+ * @return {PortOption}
+ */
+function findPortOption(port: SerialPort | SerialPortPolyfill):
+    PortOption | null {
+  for (let i = 0; i < portSelector.options.length; ++i) {
+    const option = portSelector.options[i];
+    if (option.value === 'prompt') {
+      continue;
+    }
+    const portOption = option as PortOption;
+    if (portOption.port === port) {
+      return portOption;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Adds the given port to the selection dropdown.
+ *
+ * @param {SerialPort} port the port to add
+ * @return {PortOption}
+ */
+function addNewPort(port: SerialPort | SerialPortPolyfill): PortOption {
+  const portOption = document.createElement('option') as PortOption;
+  portOption.textContent = `Port ${portCounter++}`;
+  portOption.port = port;
+  portSelector.appendChild(portOption);
+  return portOption;
+}
+
+/**
+ * Adds the given port to the selection dropdown, or returns the existing
+ * option if one already exists.
+ *
+ * @param {SerialPort} port the port to add
+ * @return {PortOption}
+ */
+function maybeAddNewPort(port: SerialPort | SerialPortPolyfill): PortOption {
+  const portOption = findPortOption(port);
+  if (portOption) {
+    return portOption;
+  }
+
+  return addNewPort(port);
+}
+
+/**
+ * Download the terminal's contents to a file.
+ */
+function downloadTerminalContents(): void {
+  if (!term) {
+    throw new Error('no terminal instance found');
+  }
+
+  if (term.rows === 0) {
+    console.log('No output yet');
+    return;
+  }
+
+  term.selectAll();
+  const contents = term.getSelection();
+  term.clearSelection();
+  const linkContent = URL.createObjectURL(
+      new Blob([new TextEncoder().encode(contents).buffer],
+          {type: 'text/plain'}));
+  const fauxLink = document.createElement('a');
+  fauxLink.download = `terminal_content_${new Date().getTime()}.txt`;
+  fauxLink.href = linkContent;
+  fauxLink.click();
+}
+
+/**
+ * Clear the terminal's contents.
+ */
+function clearTerminalContents(): void {
+  if (!term) {
+    throw new Error('no terminal instance found');
+  }
+
+  if (term.rows === 0) {
+    console.log('No output yet');
+    return;
+  }
+
+  term.clear();
+}
 
 /**
  * Sets |port| to the currently selected port. If none is selected then the
  * user is prompted for one.
  */
 async function getSelectedPort(): Promise<void> {
-  try {
-    const serial = usePolyfill ? polyfill : navigator.serial;
-    con.innerHTML += '<pre>'+serial+'</pre><br>';
-    port = await serial.requestPort({});
-  } catch (e) {
-    return;
+  if (portSelector.value == 'prompt') {
+    try {
+      const serial = usePolyfill ? polyfill : navigator.serial;
+      port = await serial.requestPort({});
+    } catch (e) {
+      return;
+    }
+    const portOption = maybeAddNewPort(port);
+    portOption.selected = true;
+  } else {
+    const selectedOption = portSelector.selectedOptions[0] as PortOption;
+    port = selectedOption.port;
   }
 }
 
+/**
+ * @return {number} the currently selected baud rate
+ */
+function getSelectedBaudRate(): number {
+  if (baudRateSelector.value == 'custom') {
+    return Number.parseInt(customBaudRateInput.value);
+  }
+  return Number.parseInt(baudRateSelector.value);
+}
 
 /**
  * Resets the UI back to the disconnected state.
  */
 function markDisconnected(): void {
-  con.innerHTML += '<pre>[disconnected]</pre><br>';
+  term.writeln('<DISCONNECTED>');
+  portSelector.disabled = false;
   connectButton.textContent = 'Connect';
   connectButton.disabled = false;
-  sentButton.disabled = true;
-  sentInput.disabled = true;
+  baudRateSelector.disabled = false;
+  customBaudRateInput.disabled = false;
+  dataBitsSelector.disabled = false;
+  paritySelector.disabled = false;
+  stopBitsSelector.disabled = false;
+  flowControlCheckbox.disabled = false;
   port = undefined;
 }
 
@@ -77,35 +238,41 @@ async function connectToPort(): Promise<void> {
   }
 
   const options = {
-    baudRate: 1000000,
-    dataBits: 8,
+    baudRate: getSelectedBaudRate(),
+    dataBits: Number.parseInt(dataBitsSelector.value),
+    parity: paritySelector.value as ParityType,
+    stopBits: Number.parseInt(stopBitsSelector.value),
+    flowControl:
+        flowControlCheckbox.checked ? <const> 'hardware' : <const> 'none',
     bufferSize,
 
     // Prior to Chrome 86 these names were used.
-    baudrate: 1000000,
-    databits: 8,
+    baudrate: getSelectedBaudRate(),
+    databits: Number.parseInt(dataBitsSelector.value),
+    stopbits: Number.parseInt(stopBitsSelector.value),
+    rtscts: flowControlCheckbox.checked,
   };
   console.log(options);
 
+  portSelector.disabled = true;
   connectButton.textContent = 'Connecting...';
-  // disable buttons...
   connectButton.disabled = true;
-  sentButton.disabled = true;
-  sentInput.disabled = true;
+  baudRateSelector.disabled = true;
+  customBaudRateInput.disabled = true;
+  dataBitsSelector.disabled = true;
+  paritySelector.disabled = true;
+  stopBitsSelector.disabled = true;
+  flowControlCheckbox.disabled = true;
 
   try {
     await port.open(options);
-    console.log('[connected]');
-    con.innerHTML += '<pre>[connected]</pre><br>';
+    term.writeln('<CONNECTED>');
     connectButton.textContent = 'Disconnect';
     connectButton.disabled = false;
-    sentButton.disabled = false;
-    sentInput.disabled = false;
   } catch (e) {
     console.error(e);
     if (e instanceof Error) {
-      console.log(`<ERROR: ${e.message}>`);
-      con.innerHTML += '<pre><ERROR: ' + e.message + '</pre><br>';
+      term.writeln(`<ERROR: ${e.message}>`);
     }
     markDisconnected();
     return;
@@ -121,6 +288,7 @@ async function connectToPort(): Promise<void> {
 
       let buffer = null;
       for (;;) {
+        console.log('loop');
         const {value, done} = await (async () => {
           if (reader instanceof ReadableStreamBYOBReader) {
             if (!buffer) {
@@ -135,18 +303,13 @@ async function connectToPort(): Promise<void> {
           }
         })();
 
+        console.log('done', done);
+
         if (value) {
           await new Promise<void>((resolve) => {
-            let val = String.fromCharCode.apply(null, value);
-            val = val.replace('\r', '');
-            val = val.replace('\n', '</pre><br><pre>');
-            term.innerHTML += ('<pre>'+val+'</pre>');
-
-            const lines = term.innerHTML.split('<br>');
-            if (lines.length>=4) {
-              term.innerHTML = lines.slice(lines.length-3).join('<br>');
-            }
-            resolve();
+            term.write(value, resolve);
+            console.log('value', String.fromCharCode.apply(null, value));
+            console.log('resolve', resolve);
           });
         }
         if (done) {
@@ -157,12 +320,10 @@ async function connectToPort(): Promise<void> {
       console.error(e);
       await new Promise<void>((resolve) => {
         if (e instanceof Error) {
-          con.innerHTML += '<pre><ERROR: ' + e.message + '</pre><br>';
-          console.log(`<ERROR: ${e.message}>`, resolve);
+          term.writeln(`<ERROR: ${e.message}>`, resolve);
         }
       });
     } finally {
-      console.log('finally');
       if (reader) {
         reader.releaseLock();
         reader = undefined;
@@ -176,8 +337,7 @@ async function connectToPort(): Promise<void> {
     } catch (e) {
       console.error(e);
       if (e instanceof Error) {
-        console.log(`<ERROR: ${e.message}>`);
-        con.innerHTML += '<pre><ERROR: ' + e.message + '</pre><br>';
+        term.writeln(`<ERROR: ${e.message}>`);
       }
     }
 
@@ -204,8 +364,7 @@ async function disconnectFromPort(): Promise<void> {
     } catch (e) {
       console.error(e);
       if (e instanceof Error) {
-        console.log(`<ERROR: ${e.message}>`);
-        con.innerHTML += '<pre><ERROR: ' + e.message + '</pre><br>';
+        term.writeln(`<ERROR: ${e.message}>`);
       }
     }
   }
@@ -213,36 +372,32 @@ async function disconnectFromPort(): Promise<void> {
   markDisconnected();
 }
 
-
 document.addEventListener('DOMContentLoaded', async () => {
-  term = document.getElementById('terminal') as HTMLElement;
-  con = document.getElementById('console') as HTMLElement;
+  const terminalElement = document.getElementById('terminal');
+  if (terminalElement) {
+    term.open(terminalElement);
+    fitAddon.fit();
+
+    window.addEventListener('resize', () => {
+      fitAddon.fit();
+    });
+  }
+
+  setInterval(function() {
+    term.clear();
+  }, 1000);
+
+
+  const downloadOutput =
+    document.getElementById('download') as HTMLSelectElement;
+  downloadOutput.addEventListener('click', downloadTerminalContents);
+
+  const clearOutput = document.getElementById('clear') as HTMLSelectElement;
+  clearOutput.addEventListener('click', clearTerminalContents);
+
+  portSelector = document.getElementById('ports') as HTMLSelectElement;
+
   connectButton = document.getElementById('connect') as HTMLButtonElement;
-  sentButton = document.getElementById('sent') as HTMLButtonElement;
-  sentInput = document.getElementById('serial_send') as HTMLInputElement;
-
-  sentButton.disabled = true;
-  sentInput.disabled = true;
-
-  if ('serial' in navigator) {
-    usePolyfill = false;
-    supported = true;
-  } else {
-    if ('usb' in navigator) {
-      usePolyfill = true;
-      supported = true;
-    }
-  }
-
-  if (!supported) {
-    term.innerHTML = '<pre>This browser is not supported'+
-                    ' on your operating system!</pre><br>';
-    connectButton.disabled = true;
-    sentButton.disabled = true;
-    sentInput.disabled = true;
-    return;
-  }
-
   connectButton.addEventListener('click', () => {
     if (port) {
       disconnectFromPort();
@@ -251,19 +406,64 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  sentButton.addEventListener('click', () => {
-    if (port?.writable == null) {
-      console.warn(`unable to find writable port`);
-      return;
+  baudRateSelector = document.getElementById('baudrate') as HTMLSelectElement;
+  baudRateSelector.addEventListener('input', () => {
+    if (baudRateSelector.value == 'custom') {
+      customBaudRateInput.hidden = false;
+    } else {
+      customBaudRateInput.hidden = true;
     }
-
-    const writer = port.writable.getWriter();
-    const data = sentInput.value + '\n';
-    writer.write(encoder.encode(data));
-    writer.releaseLock();
   });
+
+  customBaudRateInput =
+      document.getElementById('custom_baudrate') as HTMLInputElement;
+  dataBitsSelector = document.getElementById('databits') as HTMLSelectElement;
+  paritySelector = document.getElementById('parity') as HTMLSelectElement;
+  stopBitsSelector = document.getElementById('stopbits') as HTMLSelectElement;
+  flowControlCheckbox = document.getElementById('rtscts') as HTMLInputElement;
+  echoCheckbox = document.getElementById('echo') as HTMLInputElement;
+  flushOnEnterCheckbox =
+      document.getElementById('enter_flush') as HTMLInputElement;
+  autoconnectCheckbox =
+      document.getElementById('autoconnect') as HTMLInputElement;
+
+  const convertEolCheckbox =
+      document.getElementById('convert_eol') as HTMLInputElement;
+  const convertEolCheckboxHandler = () => {
+    term.options.convertEol = convertEolCheckbox.checked;
+  };
+  convertEolCheckbox.addEventListener('change', convertEolCheckboxHandler);
+  convertEolCheckboxHandler();
+
+  const polyfillSwitcher =
+      document.getElementById('polyfill_switcher') as HTMLAnchorElement;
+  if (usePolyfill) {
+    polyfillSwitcher.href = './';
+    polyfillSwitcher.textContent = 'Switch to native API';
+  } else {
+    polyfillSwitcher.href = './?polyfill';
+    polyfillSwitcher.textContent = 'Switch to API polyfill';
+  }
 
   const serial = usePolyfill ? polyfill : navigator.serial;
   const ports: (SerialPort | SerialPortPolyfill)[] = await serial.getPorts();
-  console.log('ports:', ports);
+  ports.forEach((port) => addNewPort(port));
+
+  // These events are not supported by the polyfill.
+  // https://github.com/google/web-serial-polyfill/issues/20
+  if (!usePolyfill) {
+    navigator.serial.addEventListener('connect', (event) => {
+      const portOption = addNewPort(event.target as SerialPort);
+      if (autoconnectCheckbox.checked) {
+        portOption.selected = true;
+        connectToPort();
+      }
+    });
+    navigator.serial.addEventListener('disconnect', (event) => {
+      const portOption = findPortOption(event.target as SerialPort);
+      if (portOption) {
+        portOption.remove();
+      }
+    });
+  }
 });
