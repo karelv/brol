@@ -141,6 +141,11 @@ async function connectToPort(): Promise<void> {
             val = val.replace('\r', '');
             val = val.replace('\n', '</pre><br><pre>');
             term.innerHTML += ('<pre>'+val+'</pre>');
+
+            const lines = term.innerHTML.split('<br>');
+            if (lines.length>=4) {
+              term.innerHTML = lines.slice(lines.length-3).join('<br>');
+            }
             resolve();
           });
         }
